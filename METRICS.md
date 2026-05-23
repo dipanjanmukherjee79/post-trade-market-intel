@@ -44,21 +44,29 @@ Both sources are US-based and align cleanly on a single trading calendar. This w
 ### Calendar and timezone alignment
 
 - **Reference timezone:** `America/New_York`. All timestamps are converted at ingestion.
-- **Trading day definition:** Any day on which the S&P 500 has a published closing value.
-- **Alignment between sources:** Inner join on trading day. VIX and S&P 500 must both be present for that day to enter the curated dataset.
-- **Non-trading days:** US weekends and US market holidays are excluded from analysis (they are absent from both source feeds by definition).
+- **Trading day definition:** A date appears in the curated dataset if **either** source published data for it. The curated layer is the union of FRED's and Yahoo's calendars, not the intersection.
+- **Alignment between sources:** **Outer join on trading day.** Rows where one source is missing data are retained and flagged. Whether they enter the metric layer is decided by the data quality stage (see Missing data policy below).
+- **Non-trading days:** US weekends and dates that neither source returns data for are absent from the curated layer entirely.
 - **Data freshness:** The pipeline accepts data up to T-1 (yesterday's close). The dashboard displays the most recent successful run timestamp and the date of the latest closing value used, so users can see if the data is stale.
+
+### Why outer join, not inner join
+
+The live ingestion run on 2026-05-23 exposed two distinct calendar mismatches between FRED and Yahoo:
+
+1. **Holiday semantics differ.** FRED publishes a row for every US business day including market holidays, with `value = "."` (translated to NaN). Yahoo omits closed days entirely. For Good Friday (April 3, 2026), FRED has a NaN row; Yahoo has no row.
+
+2. **Publication lag.** FRED publishes VIX after Cboe's official close (16:15 ET), which is later than Yahoo's S&P 500 close (16:00 ET). A pipeline run scheduled close to the US market close can pick up Yahoo's data but not FRED's for the same date. The next run resolves the gap.
+
+An inner-join alignment policy would silently drop both cases — including the publication-lag case, which is a genuine valid Yahoo row lost to a scheduler timing artifact. **Inner join optimises for simplicity at the expense of information.** A senior data analytics pipeline preserves every valid observation and handles incompleteness explicitly.
 
 ### Missing data policy
 
-- **Definition of "missing":** A trading day on which either source returns null, absent, or invalid data (see per-metric validation expectations).
-- **Handling:** Missing or invalid rows are written to a quarantine log (`logs/dq_quarantine.log`) with timestamp, source, raw value, and reason.
-- **No silent drops.** Every excluded row appears in the data quality log with an explanation. This satisfies the explicit case study requirement: *"Log data quality outcomes — do not silently drop bad records."*
-- **Backfill:** If a previously missing day becomes available on a later run, the pipeline ingests it and metric windows recompute for affected days automatically.
-
-### Open question for stakeholder review
-
-Should days where VIX is present but S&P close is missing (or vice versa) be excluded, or should the present source be carried forward? **Current policy: exclude.** Reasoning: aligned data is the contract; partial rows distort calculated metrics that depend on both. This is worth confirming with the data product owner before promoting to production.
+- **Definition of "missing":** A trading day where either source returns null, absent, or invalid data after schema validation.
+- **Curated layer construction:** Outer-join across FRED and Yahoo by trading day. Rows where any source-required column (VIX value, S&P close) is NaN are routed to the **quarantine log** and not promoted to the curated layer. Rows where all required columns are present are promoted to curated.
+- **Quarantine log:** Every excluded row is written to `logs/dq_quarantine.log` with: date, reason, which source(s) were missing, run timestamp, and the partial data we did receive. This satisfies the explicit case study requirement *"Log data quality outcomes — do not silently drop bad records."*
+- **No silent imputation.** Carry-forward, interpolation, and last-observation-carried-forward are not applied to filling missing values. Missing means missing.
+- **Late-arriving records.** Idempotent ingestion (raw layer rewrites by date range) plus deterministic alignment (curated layer rebuilt from raw each run) means: a record missing on Monday's run that becomes available on Tuesday's run will automatically promote from quarantine to curated on Tuesday's run. No state machine is needed; the medallion architecture's "rebuild downstream from upstream" pattern handles it.
+- **No backfill state.** The pipeline does not track "rows previously quarantined." Each run produces a fresh curated layer from the current raw layer. This is deliberately stateless — see ADR-0006 for the architectural rationale.
 
 ---
 

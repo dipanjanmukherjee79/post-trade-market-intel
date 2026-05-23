@@ -6,6 +6,79 @@ Entries are reverse-chronological. Each entry captures: **what was asked**, **wh
 
 ---
 
+
+## 2026-05-23 — Alignment policy revised after live data exposed publication lag
+
+**What was asked.** Decide the alignment policy between FRED VIX and Yahoo ^GSPC: inner join, left join, or outer join.
+
+**What the AI proposed initially.** Inner join, with an open question for stakeholder review about carry-forward vs exclude. The original METRICS.md said: *"Inner join on trading day. VIX and S&P 500 must both be present for that day to enter the curated dataset."*
+
+**What was overridden, and why.** The live ingestion run on 2026-05-23 exposed two distinct calendar mismatches between the sources:
+
+1. Good Friday (April 3, 2026) — FRED has a NaN row, Yahoo has no row at all. Different holiday semantics.
+2. May 22, 2026 — Yahoo has a row (the most recent trading day), FRED does not. This is a **publication-lag artifact**: the pipeline ran before FRED's publication window for the day, so FRED hadn't shipped VIX yet.
+
+Under inner-join policy, May 22 would have been silently dropped — a perfectly valid Yahoo observation lost to scheduler timing. Over a 90-day window that is one row in 64, or ~1.5% data loss to operational coincidence. At platform scale, this compounds.
+
+The push back I received from the engineer was clean: *"inner join is not a great design decision for a data analytics pipeline."* Correct. Inner join optimises for simplicity at the cost of information; analytical pipelines should preserve every valid observation and handle incompleteness explicitly.
+
+**Revised policy.** Outer join across sources, DQ quarantine for incomplete rows, stateless rebuild handles late-arriving records via medallion-architecture idempotency. Documented in METRICS.md (alignment and missing-data sections) and ADR-0006. The architectural pattern of "downstream is derived, not maintained" means a row missing on run N that arrives on run N+1 automatically promotes from quarantine to curated without explicit logic.
+
+**The broader lesson.** This is the second time in this session that live data overrode an upfront design choice. The first was the FRED holiday-quirks investigation (where I had over-engineered for the possibility of absent weekdays that turned out not to exist). The second is this one (where I had under-engineered for the publication-lag case that turned out to be real). **Both directions of error are surfaced only by running the code against real data — not by reasoning about it.** Worth re-emphasising in CONTRIBUTING.md: design proposals are hypotheses until they survive contact with live data.
+
+**Outcome.** METRICS.md alignment section rewritten. ADR-0006 added. Original "open question for stakeholder review" closed — decision made and documented with rationale. Transformation/alignment code to be written against the revised policy.
+
+---
+
+## 2026-05-23 — Yahoo ingestor: third-party exception signature discovered the hard way
+
+**What was asked.** Implement `YahooIngestor` with explicit handling of yfinance's known failure modes — all-NaN Close, partial NaN, missing columns, rate limits.
+
+**What the AI produced.** Working implementation plus 17 tests. 16 passed first run; one failed.
+
+**What broke and why.** The test for the rate-limit transient classification did:
+
+```python
+mock_inst.history.side_effect = YFRateLimitError("rate limited")
+```
+
+— the standard Python idiom of constructing an exception with a message. This raised `TypeError: YFRateLimitError.__init__() takes 1 positional argument but 2 were given`.
+
+Investigation: `yfinance.exceptions.YFRateLimitError.__init__` has signature `(self)`. The error message ("Too Many Requests. Rate limited. Try after a while.") is **hardcoded into the class**, not passed at construction time. This is a non-standard convention compared to the Python core — most exception classes follow `Exception(message)` — but yfinance has chosen otherwise.
+
+**Resolution.** Test fixed to call `YFRateLimitError()` with no args, which is portable across:
+- The real yfinance exception (newer versions, signature `(self)`)
+- Our placeholder fallback class (when import fails on older versions, signature `(self, *args, **kwargs)` inherited from Exception)
+
+Documented in the test with an inline comment so the next person to look at it understands why the bare constructor.
+
+**Outcome.** Tests now 52/52 passing. The lesson is broader than this one test: **third-party libraries don't always follow Python convention, and you only discover this by actually running the code, not by reading the docs.** The integration smoke run (whether unit-level or live) is where these things surface.
+
+---
+
+## 2026-05-23 — Yahoo ingestor: "all-NaN Close" handled as PERMANENT not EMPTY
+
+**What was asked.** When yfinance returns a DataFrame full of NaN, should we treat it as EMPTY (no data) or PERMANENT_FAILURE (broken upstream)?
+
+**What the AI proposed first.** Treat both as EMPTY, since technically the response is "rows with no usable content."
+
+**What was overridden, and why.** The two cases are qualitatively different and conflating them hides real failures:
+
+- **EMPTY** = the source legitimately had no data to give us (weekends, pre-IPO dates, extended market closures). Information correctly communicated by the upstream system.
+- **All-NaN Close** = the response envelope is structurally valid but the content is broken. Something failed in the upstream producer's pipeline. For yfinance specifically, this is the canonical signal that Yahoo restructured their frontend HTML and the scraper is no longer parsing prices.
+
+Treating the second case as EMPTY would let the pipeline silently continue with no usable data — exactly the silent-corruption anti-pattern the contract pattern is designed to prevent.
+
+Decision: all-NaN Close raises `YahooDataError` (non-transient) -> base classifies as PERMANENT_FAILURE -> `run_pipeline.py` exits non-zero -> investigation triggered.
+
+A 50% NaN heuristic threshold was added for the "partial scraper failure" case, with an explicit comment that it's a v1 heuristic and proper DQ tooling (Great Expectations / Soda) would replace it with a configurable expectation.
+
+**Outcome.** Tests cover both the all-NaN and >50% NaN cases as permanent failures, plus the boundary case (exactly 50% NaN is accepted, per strict `>` operator). The pattern is documented in the module docstring of `src/ingestion/yahoo.py`.
+
+---
+
+---
+
 ## 2026-05-23 — Live FRED run: data tells a story, hypothesis partly wrong
 
 **What was asked.** Run the FRED ingestor against live data for a 90-day window and verify the output makes sense.
@@ -87,13 +160,3 @@ The trade-off: the caller has to remember to inspect `.outcome`. Documented in t
 
 **Outcome.** ...
 ```
-
----
-
-## 2026-05-23 — Orphan src/base.py from earlier file-copy confusion
-
-**What was found.** When `make test` was run with `--cov-report`, coverage surfaced an orphan `src/base.py` with 0% coverage. The real base contract has always lived at `src/ingestion/base.py` (100% covered). The duplicate file was a leftover from this morning's zip/loose-files extraction confusion documented in the workflow note entry.
-
-**What was overridden, and why.** Removed `src/base.py`. Coverage recovered from 62% (misleadingly low) to 99% — the real picture.
-
-**Outcome.** Repo no longer has a phantom file. Lesson worth keeping: **coverage reports are useful not just for "did I write tests" but for surfacing files that shouldn't exist.** A high-coverage repo with one mysterious 0% file is a stronger signal than a uniformly-medium-coverage repo.
