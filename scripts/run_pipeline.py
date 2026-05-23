@@ -24,6 +24,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pandas as pd
+
 # Make src importable when run from repo root
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -39,6 +41,11 @@ except ImportError:
 from src.ingestion.base import IngestionOutcome
 from src.ingestion.fred import FREDIngestor
 from src.ingestion.yahoo import YahooIngestor
+from src.transformation.alignment import (
+    AlignmentError,
+    align_sources,
+    summarise_alignment,
+)
 
 
 def _setup_logging() -> None:
@@ -94,8 +101,52 @@ def main() -> int:
         yahoo_result.output_path,
     )
 
-    # --- Transformation / DQ / Metrics / Signal (pending implementation) ---
-    logger.info("Transformation, DQ, metric, signal stages -- pending implementation")
+    # --- Transformation: source alignment ---
+    # Only run alignment if both ingestors actually wrote raw files. Transient
+    # failures from either source mean we don't have fresh raw to align — log
+    # and exit informationally rather than crashing the alignment step.
+    if (
+        fred_result.output_path is not None
+        and yahoo_result.output_path is not None
+    ):
+        try:
+            fred_raw = pd.read_parquet(fred_result.output_path)
+            yahoo_raw = pd.read_parquet(yahoo_result.output_path)
+            aligned = align_sources(fred_raw, yahoo_raw)
+            summary = summarise_alignment(aligned)
+            logger.info(
+                "Alignment summary: total=%d complete=%d vix_only=%d "
+                "sp500_only=%d no_data=%d date_range=%s",
+                summary.total_rows,
+                summary.complete_rows,
+                summary.vix_only_rows,
+                summary.sp500_only_rows,
+                summary.no_data_rows,
+                (
+                    f"{summary.date_range[0].date()} -> {summary.date_range[1].date()}"
+                    if summary.date_range
+                    else "n/a"
+                ),
+            )
+            # Write aligned dataset to curated layer (pre-DQ; DQ stage will
+            # filter quarantine rows out into the final curated layer)
+            aligned_path = Path("data/curated/aligned.parquet")
+            aligned_path.parent.mkdir(parents=True, exist_ok=True)
+            aligned.to_parquet(aligned_path, index=False)
+            logger.info("Wrote aligned dataset to %s", aligned_path)
+        except AlignmentError as exc:
+            logger.error("Alignment failed: %s", exc)
+            return 1
+    else:
+        logger.warning(
+            "Skipping alignment: one or both ingestors did not produce raw output "
+            "(fred=%s yahoo=%s)",
+            fred_result.outcome.value,
+            yahoo_result.outcome.value,
+        )
+
+    # --- DQ / Metrics / Signal (pending implementation) ---
+    logger.info("DQ, metric, signal stages -- pending implementation")
 
     # Exit non-zero on permanent failure from any source.
     # Transient and empty are recoverable / informational, not pipeline-fatal —

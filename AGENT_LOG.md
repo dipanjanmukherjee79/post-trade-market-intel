@@ -7,6 +7,20 @@ Entries are reverse-chronological. Each entry captures: **what was asked**, **wh
 ---
 
 
+## 2026-05-23 — Alignment module: separation of "what to align" from "what to do with it"
+
+**What was asked.** Build the alignment module (`src/transformation/alignment.py`) implementing ADR-0006's outer-join policy.
+
+**The design choice worth noting.** I deliberately split the work into two collaborating modules rather than one. Alignment outputs an aligned-but-not-yet-validated DataFrame with NaN values for any source's missing data. The DQ stage (yet to be written) decides what to do with those NaNs — promote to curated, quarantine, or both. This matters because the two responsibilities have different lifecycles: alignment's logic is a join, which is set-theoretic and stable; DQ's logic is policy, which changes as the team's risk appetite evolves.
+
+If the two were collapsed into a single function "align_and_filter", a DQ policy change (e.g. "we now want to retain rows with only Yahoo data") would require touching alignment code. With the split, alignment stays untouched and DQ is the only place policy lives.
+
+**The four-bucket summary.** The `AlignmentSummary` dataclass categorises every aligned row into exactly one of: complete, vix_only, sp500_only, no_data. The four buckets sum to total_rows by construction, asserted in the code. The `no_data` bucket is Good Friday's case (FRED row with NaN, no Yahoo row) — almost missed it during design. Catching it now means the DQ stage has clean input categories to make decisions on.
+
+**Outcome.** 15 alignment tests, 67 total tests passing. Coverage 97%. Two uncovered lines in alignment.py are a defensive MergeError guard for the should-never-happen case where validation misses a duplicate — left honestly uncovered rather than gamed with `# pragma: no cover`.
+
+---
+
 ## 2026-05-23 — Alignment policy revised after live data exposed publication lag
 
 **What was asked.** Decide the alignment policy between FRED VIX and Yahoo ^GSPC: inner join, left join, or outer join.
