@@ -150,10 +150,22 @@ class Ingestor(ABC):
         ConnectionError,
     )
 
-    def __init__(self, output_dir: Path | str):
+    def __init__(self, output_dir: Path | str, source_name: str | None = None):
+        """Initialise the ingestor.
+
+        Args:
+            output_dir: Directory to write Parquet output. Created if missing.
+            source_name: Optional override for the class-level source_name. Useful
+                for parameterised subclasses (e.g. one FRED class serving multiple
+                series — each instance gets a unique source_name and therefore a
+                unique output path).
+        """
+        if source_name is not None:
+            self.source_name = source_name
         if not self.source_name:
             raise ValueError(
-                f"{type(self).__name__}.source_name must be set on the subclass"
+                f"{type(self).__name__}.source_name must be set on the subclass "
+                f"or passed to __init__"
             )
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)

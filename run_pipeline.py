@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Make src importable when run from repo root
@@ -54,7 +54,7 @@ def main() -> int:
     logger = logging.getLogger(__name__)
 
     raw_dir = Path("data/raw")
-    end_date = datetime.utcnow()
+    end_date = datetime.now(timezone.utc)
     lookback_days = int(os.environ.get("DEFAULT_LOOKBACK_DAYS", "90"))
     start_date = end_date - timedelta(days=lookback_days)
     logger.info(
