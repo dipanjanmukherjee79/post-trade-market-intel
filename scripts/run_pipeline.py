@@ -42,7 +42,9 @@ except ImportError:
 from src.ingestion.base import IngestionOutcome
 from src.ingestion.fred import FREDIngestor
 from src.ingestion.yahoo import YahooIngestor
+from src.metrics.computations import compute_serving_dataset
 from src.quality.checks import assess_alignment
+from src.signals.rag import enrich_with_signal
 from src.transformation.alignment import (
     AlignmentError,
     align_sources,
@@ -215,6 +217,43 @@ def main() -> int:
                     Path("logs/dq_quarantine.log"),
                 )
 
+            # --- Metrics + signal: compose the serving (gold) layer ---
+            # Reads the promoted (curated) frame from the in-memory
+            # QualityResult — no re-load from disk needed.
+            serving = compute_serving_dataset(quality_result.promoted)
+            serving = enrich_with_signal(serving)
+
+            serving_path = Path("data/serving/serving.parquet")
+            serving_path.parent.mkdir(parents=True, exist_ok=True)
+            serving.to_parquet(serving_path, index=False)
+            logger.info(
+                "Wrote serving (gold) dataset to %s (%d rows)",
+                serving_path,
+                len(serving),
+            )
+
+            # Latest-row summary for operational visibility
+            if len(serving) > 0:
+                latest = serving.iloc[-1]
+                logger.info(
+                    "Latest signal: date=%s vix=%.2f rag=%s sp500_close=%.2f "
+                    "sma_10=%s sma_20=%s",
+                    latest["date"].strftime("%Y-%m-%d"),
+                    latest["vix"],
+                    latest["rag_signal"],
+                    latest["sp500_close"],
+                    (
+                        f"{latest['sp500_sma_10']:.2f}"
+                        if pd.notna(latest["sp500_sma_10"])
+                        else "n/a"
+                    ),
+                    (
+                        f"{latest['sp500_sma_20']:.2f}"
+                        if pd.notna(latest["sp500_sma_20"])
+                        else "n/a"
+                    ),
+                )
+
         except AlignmentError as exc:
             logger.error("Alignment failed: %s", exc)
             return 1
@@ -225,9 +264,6 @@ def main() -> int:
             fred_result.outcome.value,
             yahoo_result.outcome.value,
         )
-
-    # --- Metrics / Signal (pending implementation) ---
-    logger.info("Metric and signal stages -- pending implementation")
 
     # Exit non-zero on permanent failure from any source.
     # Transient and empty are recoverable / informational, not pipeline-fatal —

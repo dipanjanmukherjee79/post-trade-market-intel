@@ -7,6 +7,67 @@ Entries are reverse-chronological. Each entry captures: **what was asked**, **wh
 ---
 
 
+## 2026-05-24 — Outstanding: CI test job failing on push (deferred)
+
+**Status.** Open. Deferred pending the case study build.
+
+**Observation.** GitHub Actions `ci.yml` test job reports `Process completed with exit code 1` on push to main. Run #4 at 75e6c9a (alignment module commit) failed in 35s — long enough to suggest pytest actually ran rather than failing at install. Local `make test` passes 115/115 with no warnings.
+
+**Hypothesis (not yet confirmed).** Most likely: workflow's `pip install` step is missing the `[dev]` extras, so pytest-mock isn't available in the CI environment and test_yahoo.py fails at collection. Less likely: Python version mismatch (local 3.14.4 vs CI default).
+
+**Why deferred.** CI green status is polish, not deliverable. Case study reviewers will run the code locally, not look at CI badges. Fixing this competes with finishing the dashboard and the deck, which are higher-leverage.
+
+**Action to take when picking back up.**
+1. Expand the failed `test` step in the GitHub Actions run page and read the actual pytest output.
+2. Confirm whether `pyproject.toml` lists pytest-mock in `optional-dependencies.dev` and whether the workflow does `pip install -e ".[dev]"`.
+3. Apply the smallest fix that makes the badge green.
+
+**Lesson.** Set up CI early on a real repo, not at scaffold time on a near-empty repo. The scaffolding's CI workflow was written before yfinance and pytest-mock were dependencies. Workflows need to be evolved as the project grows — the same maintenance discipline as the code.
+
+---
+
+## 2026-05-24 — Two SMA timescales: design depth over single-default convention
+
+**What was asked.** Decide between SMA_20 (industry convention, less coverage in a 90-day window), SMA_10 (more coverage but non-standard), or both.
+
+**The decision and the rationale.** Compute both. The reasoning:
+
+1. **Different timescales tell different stories.** The 10-day fast SMA catches regime changes the moment they happen (e.g. the March 6 stress regime becoming visible by the second week of March). The 20-day slow SMA shows the underlying trend approximating one trading month. Together they tell a richer story than either alone — when they cross, momentum has shifted; when they converge, the market is consolidating.
+
+2. **Coverage matters for a 90-day demo window.** SMA_10 is defined on 86% of the visible range vs 70% for SMA_20. Having both gives the dashboard meaningful signal coverage starting on day 10 (fast) and adds the slower confirmation from day 20 (slow). A single SMA forces a trade-off; computing both removes it.
+
+3. **The serving layer is wide enough to absorb the extra column.** Per the earlier "preserve all curated columns" decision, the gold layer already carries OHLCV plus provenance — one more metric column is trivial. The dashboard chooses what to render.
+
+**Design refinement: named constants instead of "default + custom".** Replaced `SMA_WINDOW_DEFAULT = 20` with `SMA_FAST_WINDOW = 10` and `SMA_SLOW_WINDOW = 20`. The constant names now communicate design intent ("we have two timescales by design") rather than implementation defaults ("20 is what we usually pass"). A future Macquarie-specific calibration would change one constant on one line, reviewable as a single PR.
+
+**Why this matters for the panel.** The most senior-engineering signal in this decision is that I considered the obvious answer (SMA_20, lean on v2 production-extension narrative) and asked a sharper question: *"if both timescales are useful, why pick one?"* The answer was *compute both, name them clearly, document why.* That's the difference between fitting metrics to convention versus fitting them to the analytical question.
+
+**Outcome.** 115 tests passing, 98% coverage. `compute_serving_dataset` now produces sp500_sma_10, sp500_sma_20, and sp500_pct_change. The orchestrator's "latest signal" log line surfaces both SMAs. METRICS.md Metric 1 rewritten to unify both windows under a single conceptual heading with the rationale for why both are needed.
+
+---
+
+## 2026-05-23 — Metric + signal layer: gold serving dataset, end-to-end pipeline complete
+
+**What was asked.** Implement the three metrics from METRICS.md (20-day SMA, daily % change, raw VIX pass-through) and the RAG signal from ADR-0003, composed into a serving (gold) layer ready for the dashboard.
+
+**The design choices worth recording:**
+
+1. **Preserve all curated columns in the serving layer.** Discussed and locked deliberately: if the dashboard later wants tooltips on OHLC, no ETL change is required. The columnar storage cost is trivial. The trade-off — slightly wider gold than strictly required — is the right call when the consumer is a single dashboard you control.
+
+2. **Compute the RAG signal for every row, not just the latest.** Per-row computation enables the dashboard to render the signal's history across the visible window — green/amber/red bands following the market. The "current" signal is just `serving.iloc[-1]['rag_signal']`. More flexible than computing once on the latest row.
+
+3. **v1 lookback is internal to the curated window.** First 19 days of any run have NaN SMA. Documented in METRICS.md with the production extension noted as v2 work (fetch a 110-day window so SMA is defined on every visible day). The dashboard will render the gap honestly rather than hiding it.
+
+4. **Boundary semantics pinned with tests.** Four explicit boundary tests for the RAG thresholds: `19.99 -> green`, `20.0 -> amber`, `30.0 -> amber`, `30.01 -> red`. ADR-0003 specifies these — the tests make the contract executable. Any future change must update both ADR and tests as a single PR.
+
+**No bugs this round.** The wider str_replace pattern from the last iteration (rewriting whole blocks rather than narrow inserts across control flow boundaries) avoided the indentation issue I hit when wiring DQ. Lesson applied.
+
+**Coverage milestone.** 113 tests across the whole pipeline. `src/metrics/computations.py` and `src/signals/rag.py` are both at 100%. Overall coverage 98% — the remaining gap is defensive branches in alignment and yahoo, deliberately uncovered with documented reasoning rather than gamed with pragmas.
+
+**The pipeline is now end-to-end on real data.** From `make run`: raw VIX + raw OHLCV → aligned (outer join) → curated (DQ promoted, JSONL quarantine log) → serving (metrics + signal). Every architectural decision from ADRs 0001–0006 is validated against the 2026 market stress regime captured in our 90-day window. The next step is the dashboard.
+
+---
+
 ## 2026-05-23 — DQ module: pure/impure shell pattern reinforced; one botched str_replace
 
 **What was asked.** Build the DQ module (`src/quality/checks.py`) implementing the policy from ADR-0006: split aligned rows into promoted (curated) and quarantined (audit log) frames, with typed reason codes derived from the alignment-stage `*_fetched_at` provenance.

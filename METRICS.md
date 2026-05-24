@@ -70,31 +70,40 @@ An inner-join alignment policy would silently drop both cases — including the 
 
 ---
 
-## Metric 1 — 20-day Simple Moving Average of S&P 500 close
+## Metric 1 — Rolling Simple Moving Averages of S&P 500 close (10-day and 20-day)
 
 **What it measures (plain language):**
-The average closing price of the S&P 500 over the most recent 20 trading days. Each trading day, the oldest value drops out and the newest value is added.
+The average closing price of the S&P 500 over the most recent N trading days, for two values of N — a fast 10-day window and a slow 20-day window. Each trading day, the oldest value in each window drops out and the newest is added.
 
 **Why it matters for the dashboard question:**
-Daily closing prices are noisy. A rolling average smooths short-term noise and makes the underlying trend visible to a non-technical audience. 20 trading days ≈ one calendar month, which matches how non-experts intuitively think about "recent" market activity.
+Daily closing prices are noisy. A rolling average smooths short-term noise and makes the underlying trend visible to a non-technical audience. Two timescales together tell a richer story than one: the 10-day captures fast regime changes (the moment when a stress regime begins or ends), the 20-day shows the slower underlying trend approximating one trading month. When the two cross, momentum has shifted. When they converge, the market is consolidating.
 
-**Exact definition:**
-For each trading day `t`, the 20-day SMA equals the arithmetic mean of the S&P 500 closing prices on trading days `t-19` through `t` inclusive.
+For a 90-day analytical window in particular, having both timescales gives the dashboard more usable signal coverage — the 10-day SMA is defined on day 10 onwards, the 20-day on day 20 onwards.
+
+**Exact definition (both):**
+For each trading day `t`, the N-day SMA equals the arithmetic mean of the S&P 500 closing prices on trading days `t-(N-1)` through `t` inclusive.
+
+```
+SMA_N(t) = mean(close_{t-(N-1)}, close_{t-(N-2)}, ..., close_t)
+```
 
 **Inputs required:**
 - S&P 500 daily close price
 - Trading day index (derived from S&P 500 calendar)
 
-**Window:** 20 trading days, rolling, right-aligned.
+**Windows:**
+- `sp500_sma_10`: 10 trading days, rolling, right-aligned
+- `sp500_sma_20`: 20 trading days, rolling, right-aligned
 
-**Edge cases:**
-- **First 19 days of the time series:** SMA is undefined. Rendered as a gap in the dashboard overlay — never as zero, never interpolated.
-- **Missing close within the window:** The window requires 20 valid closes. If fewer are available (one or more days quarantined), the SMA for that day is undefined and logged.
+**Edge cases (both):**
+- **First (N-1) days of the time series:** SMA is undefined. Rendered as a gap in the dashboard overlay — never as zero, never interpolated.
+- **Missing close within the window:** Each window requires N valid closes. If fewer are available (one or more days quarantined), the SMA for that day is undefined and logged.
+- **Production extension (v2):** In a production deployment, the ingestion stage would fetch an additional 20-day lookback window beyond the visible range, so both SMAs are defined on every dashboard day. In v1 the lookback is internal to the curated window, which is simpler and keeps the metric computation as a pure function of the visible curated data. Documented for traceability.
 
 **Validation expectations:**
-- SMA at any day `t` must be ≤ max(close[t-19..t]) and ≥ min(close[t-19..t])
-- SMA cannot be negative
-- SMA on consecutive days cannot differ by more than the largest single-day price move within the window (sanity bound)
+- Each SMA value at any day `t` must be ≤ max(close in its window) and ≥ min(close in its window)
+- Neither SMA can be negative
+- SMA values on consecutive days cannot differ by more than the largest single-day price move within the window (sanity bound)
 
 ---
 
