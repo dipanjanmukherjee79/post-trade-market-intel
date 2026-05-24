@@ -7,6 +7,50 @@ Entries are reverse-chronological. Each entry captures: **what was asked**, **wh
 ---
 
 
+## 2026-05-24 — Repo commits the curated, serving, and quarantine artefacts (Option C)
+
+**What was decided.** Three of the four pipeline outputs are committed to the repo:
+- `data/curated/curated.parquet` (silver layer — validated, DQ-passed rows)
+- `data/serving/serving.parquet` (gold layer — metrics + RAG signal)
+- `logs/dq_quarantine.log` (DQ audit trail — typed reason codes, full provenance)
+
+The raw bronze layer (`data/raw/*.parquet`) is gitignored. It is regeneratable from the source APIs and not a deliverable artefact.
+
+**Why all three downstream layers, not just the gold one (Option B).** The quarantine log is the single strongest piece of evidence of the architectural choices made in the build — outer join, typed reason codes, no silent drops, late-arriving record handling. A reviewer who clones the repo and opens the Streamlit dashboard would see the price and signal charts but **not the DQ transparency section** (which is data-driven and requires the quarantine log to populate). Committing the log makes that architectural depth visible end-to-end without requiring the reviewer to run anything.
+
+The curated silver layer is committed for the same reason: a reviewer can read `curated.parquet` directly with pandas and verify what the gold layer was computed from. The medallion separation is observable, not just claimed.
+
+**Trade-offs accepted.**
+- The repo now has small binary files (parquet) in its git history. Diffs are not human-readable. This is a non-issue at this scope (<100KB total).
+- The committed data represents a frozen snapshot of the demo state, not a live feed. Anyone who runs `make run` locally will produce a slightly different curated/serving layer if the market has moved since the snapshot was taken. This is documented; not a bug.
+- The pipeline writes its outputs back to the repo on each run, which means `make run` produces a dirty git working tree. Acceptable for a case study; in a production deployment this would not be the pattern (output would go to S3 / object storage / a lakehouse, not git).
+
+**What the panel hears.** *"The repo contains the verified case study deliverable — bronze excluded because it's regeneratable, silver and gold included as the analytical deliverable, and the DQ quarantine log included as the audit trail. A reviewer can clone-and-dashboard with no setup, and can read the silver layer in any DataFrame tool to verify the metric computation. In production this would be a lakehouse — but the medallion separation is observable here just as it would be there."*
+
+---
+
+## 2026-05-24 — Streamlit dashboard: visual layer of the pipeline operational
+
+**What was asked.** Build the Streamlit dashboard rendering the serving (gold) layer with the design choices locked from the previous discussion: single-page layout, traffic-light palette, NaN-as-gaps, no user interactivity in v1.
+
+**The architectural alignment worth noting.** The dashboard is deliberately a thin read-only layer over `data/serving/serving.parquet`. It does no computation of its own — every metric, the RAG classification, and the alignment provenance are produced by the pipeline upstream. The only logic inside the dashboard is rendering (chart construction, KPI formatting, signal-to-color mapping). This matches the functional-core / imperative-shell pattern: the dashboard is part of the shell, not the core.
+
+A consequence worth pointing out: **if the dashboard breaks, the data is still good**. If the data is bad, the dashboard surfaces it (the `render_no_data_message` path, the DQ transparency section). The two concerns are decoupled.
+
+**Three design choices that survived contact with implementation:**
+
+1. **Plotly over native st.line_chart for the price chart.** Native Streamlit charts don't render NaN as gaps cleanly — they interpolate. Plotly's `connectgaps=False` is the right primitive for the "first 19 days have undefined SMA" case we need to surface honestly.
+
+2. **Heatmap for the RAG history band.** A horizontal heatmap with one row, three discrete colors, and a custom colorscale produces the band-chart visual without writing manual shape geometry. Hover tooltips come for free.
+
+3. **Methodology disclosure as a collapsible expander.** Most users won't read it; reviewers and panel members will. Putting it inline with the dashboard rather than hiding it behind a separate "About" page makes the depth available without cluttering the primary view.
+
+**Honest limitation.** The dashboard test surface is minimal — no unit tests for the rendering functions, only a compile-and-import smoke check. This is deliberate: the pure logic (metric computation, signal classification) is already tested via `test_metrics.py` and `test_signals.py`. The Streamlit rendering itself is impure shell, exercised by running `make dashboard` and looking at the output. Same pattern as `run_pipeline.py` — orchestration is smoke-tested, not unit-tested.
+
+**Outcome.** Dashboard renders the full case-study story: the March 6 stress regime begin, the March 27-30 climax (two consecutive Red days at VIX > 30, S&P at the window's absolute low of 6344), and the recovery into May (Green, close at 7445, fast SMA above slow SMA above price — golden alignment). When demonstrating, the panel sees the architecture's payoff in one screen.
+
+---
+
 ## 2026-05-24 — Outstanding: CI test job failing on push (deferred)
 
 **Status.** Open. Deferred pending the case study build.

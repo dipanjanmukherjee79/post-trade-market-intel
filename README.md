@@ -40,6 +40,34 @@ scripts/            # pipeline entrypoint
 .github/workflows/  # CI + scheduled refresh
 ```
 
+## Dashboard
+
+Run locally:
+
+```bash
+make dashboard
+```
+
+This starts a Streamlit server on `localhost:8501`. The dashboard reads `data/serving/serving.parquet` (produced by `make run`) and renders:
+
+- KPI strip with latest signal, S&P 500 close, VIX, and both moving averages
+- S&P 500 close with fast (10-day) and slow (20-day) SMA overlays — NaN rendered as gaps
+- VIX with horizontal RAG threshold lines at 20 (green/amber) and 30 (amber/red)
+- Per-day RAG signal history across the full window
+- DQ transparency section showing any quarantined dates from the latest run
+- Methodology disclosure for reviewers wanting the depth
+
+### Deploying to Streamlit Community Cloud
+
+The dashboard is designed for the free tier of Streamlit Community Cloud:
+
+1. Push the repo to GitHub (data files committed per ADR-0001)
+2. At https://share.streamlit.io, point a new app at this repo with main file path `dashboard/app.py`
+3. Set Python version to 3.12 (Streamlit Cloud default — pyproject.toml is compatible)
+4. Deploy
+
+No secrets are required for the dashboard itself — it reads only committed data. The `FRED_API_KEY` is only needed for the pipeline (`make run`), which is a developer / CI concern, not a dashboard concern.
+
 ## Documentation
 
 - `docs/ADRs.md` — consolidated architecture decisions

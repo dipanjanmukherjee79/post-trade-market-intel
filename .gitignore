@@ -52,5 +52,9 @@ data/raw/*.csv
 # data/serving/*.parquet  <-- committed by the pipeline (see ADR-0002)
 
 # Logs (kept directory, ignore content)
+# EXCEPTION: commit the DQ quarantine log per ADR-0006 — it is part of the
+# case study deliverable (audit trail visible to reviewers without running
+# the pipeline). Other ad-hoc logs remain ignored.
 logs/*.log
+!logs/dq_quarantine.log
 logs/*.json
