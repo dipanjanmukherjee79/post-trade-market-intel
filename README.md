@@ -1,6 +1,11 @@
 # Post-Trade Market Intelligence Pipeline
 
+> **Live dashboard:** https://post-trade-market-intel.streamlit.app
+>
+
 > Case study deliverable — a data engineering prototype demonstrating a scoped market intelligence dashboard for a fictional post-trade team.
+
+
 
 ## What this is
 
