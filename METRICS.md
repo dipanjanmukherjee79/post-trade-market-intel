@@ -8,7 +8,7 @@ This document defines the metric requirements for the Market Intelligence dashbo
 |---|---|
 | Written | [DATE — fill in when committed] |
 | Version | 1.0 |
-| Owner | Dipanjan Ghosh |
+| Owner | Dipanjan Mukherjee |
 | Status | Pre-implementation requirements |
 
 ## Scope
@@ -231,4 +231,4 @@ In a real engagement, the following would be confirmed with the data product own
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | [DATE] | Dipanjan Ghosh | Initial definition prior to implementation |
+| 1.0 | [DATE] | Dipanjan Mukherjee | Initial definition prior to implementation |

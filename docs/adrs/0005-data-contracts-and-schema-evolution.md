@@ -4,7 +4,7 @@
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Related | ADR-0001 (Storage), ADR-0004 (Analytical layer), METRICS.md |
 
 ## Context
@@ -89,4 +89,4 @@ Validate at boundaries but do not persist schema definitions in code or files. R
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | 2026-05-20 | Dipanjan Ghosh | Initial decision |
+| 1.0 | 2026-05-20 | Dipanjan Mukherjee | Initial decision |

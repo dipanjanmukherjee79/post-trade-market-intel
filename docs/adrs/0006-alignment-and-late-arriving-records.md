@@ -4,7 +4,7 @@
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-23 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Supersedes | — |
 | Related | METRICS.md (alignment and missing-data policy), ADR-0001 (medallion storage), ADR-0005 (data contracts) |
 
@@ -100,4 +100,4 @@ Rejected for v1. Could be appropriate at platform scale (e.g. "if FRED publishes
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | 2026-05-23 | Dipanjan Ghosh | Initial decision, driven by live-run discoveries of holiday semantics and publication-lag cases |
+| 1.0 | 2026-05-23 | Dipanjan Mukherjee | Initial decision, driven by live-run discoveries of holiday semantics and publication-lag cases |

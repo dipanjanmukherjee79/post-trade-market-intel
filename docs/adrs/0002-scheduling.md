@@ -4,7 +4,7 @@
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Supersedes | — |
 
 ## Context
@@ -90,4 +90,4 @@ Rejected for this case study. Adds a cloud account dependency for the reviewer t
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | 2026-05-20 | Dipanjan Ghosh | Initial decision |
+| 1.0 | 2026-05-20 | Dipanjan Mukherjee | Initial decision |

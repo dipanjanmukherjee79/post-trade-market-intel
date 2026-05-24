@@ -23,7 +23,7 @@ ADRs follow a MADR-style format: status, context, decision, rationale, consequen
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Supersedes | — |
 
 ### Context
@@ -109,7 +109,7 @@ Rejected. Loses SQL ergonomics for transformation logic. The metric calculations
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Supersedes | — |
 
 ### Context
@@ -199,7 +199,7 @@ Rejected for this case study. Adds a cloud account dependency for the reviewer t
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Supersedes | — |
 | Related | METRICS.md (metric definitions and signal contract) |
 
@@ -299,7 +299,7 @@ These would be raised with the data product owner and the post-trade risk team i
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Related | ADR-0001 (Storage and transformation), METRICS.md (metric contract) |
 
 ### Context
@@ -379,7 +379,7 @@ Use a dedicated product that enforces metric definitions, exposes them through a
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Related | ADR-0001 (Storage), ADR-0004 (Analytical layer), METRICS.md |
 
 ### Context
@@ -470,7 +470,7 @@ Validate at boundaries but do not persist schema definitions in code or files. R
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-23 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Supersedes | — |
 | Related | METRICS.md (alignment and missing-data policy), ADR-0001 (medallion storage), ADR-0005 (data contracts) |
 
@@ -566,7 +566,7 @@ Rejected for v1. Could be appropriate at platform scale (e.g. "if FRED publishes
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | 2026-05-23 | Dipanjan Ghosh | Initial decision, driven by live-run discoveries of holiday semantics and publication-lag cases |
+| 1.0 | 2026-05-23 | Dipanjan Mukherjee | Initial decision, driven by live-run discoveries of holiday semantics and publication-lag cases |
 
 
 ---
@@ -575,5 +575,5 @@ Rejected for v1. Could be appropriate at platform scale (e.g. "if FRED publishes
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | 2026-05-20 | Dipanjan Ghosh | Initial consolidation of ADRs 0001–0005 |
-| 1.1 | 2026-05-23 | Dipanjan Ghosh | Added ADR-0006 (alignment policy, driven by live-run discoveries) |
+| 1.0 | 2026-05-20 | Dipanjan Mukherjee | Initial consolidation of ADRs 0001–0005 |
+| 1.1 | 2026-05-23 | Dipanjan Mukherjee | Added ADR-0006 (alignment policy, driven by live-run discoveries) |

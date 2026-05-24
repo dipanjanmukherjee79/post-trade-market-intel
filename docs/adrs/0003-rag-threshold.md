@@ -4,7 +4,7 @@
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Supersedes | — |
 | Related | METRICS.md (metric definitions and signal contract) |
 
@@ -100,4 +100,4 @@ These would be raised with the data product owner and the post-trade risk team i
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | 2026-05-20 | Dipanjan Ghosh | Initial decision |
+| 1.0 | 2026-05-20 | Dipanjan Mukherjee | Initial decision |

@@ -4,7 +4,7 @@
 |---|---|
 | Status | Accepted |
 | Date | 2026-05-20 |
-| Author | Dipanjan Ghosh |
+| Author | Dipanjan Mukherjee |
 | Related | ADR-0001 (Storage and transformation), METRICS.md (metric contract) |
 
 ## Context
@@ -80,4 +80,4 @@ Use a dedicated product that enforces metric definitions, exposes them through a
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | 2026-05-20 | Dipanjan Ghosh | Initial decision |
+| 1.0 | 2026-05-20 | Dipanjan Mukherjee | Initial decision |

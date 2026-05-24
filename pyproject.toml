@@ -9,7 +9,7 @@ description = "Market Intelligence pipeline — case study deliverable"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [
-    { name = "Dipanjan Ghosh" }
+    { name = "Dipanjan Mukherjee" }
 ]
 dependencies = [
     "pandas>=2.2",
