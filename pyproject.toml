@@ -36,6 +36,14 @@ dev = [
 [tool.setuptools]
 packages = ["src"]
 
+# Streamlit Cloud auto-detects Poetry from pyproject.toml. We use PEP 621 +
+# setuptools above; this tells Poetry "manage deps only, don't try to package
+# the project". Without this, Poetry fails with "No file/folder found for
+# package post-trade-market-intel" because our code lives under src/, not
+# under a top-level directory matching the project name.
+[tool.poetry]
+package-mode = false
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
