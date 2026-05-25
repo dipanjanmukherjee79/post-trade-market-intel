@@ -34,36 +34,46 @@
 
 ## Slide 2 — Framing
 
-**Visual:** Three columns. Title above: *"What I chose to focus on, and why."*
+**Visual:** Three sections stacked vertically. Title above: *"What I chose to focus on, and why."*
 
-**Column 1 — What the brief asks:**
-- Build a market intelligence dashboard
-- 90 days of post-trade activity
-- One macro series, one market index
-- RAG signal with defined threshold
-- Document AI usage and data quality
+**Section 1 — Scope choices (three columns):**
 
-**Column 2 — How I interpreted it:**
-- *Can you scope a data product from an open brief?*
-- *Can you make defensible decisions under ambiguity?*
-- *Can you build something a non-technical user can act on?*
-- *Will you partner with the business, or just deliver code?*
+| What the brief asks | How I interpreted it | What I deliberately did NOT try to answer |
+|---|---|---|
+| Market intelligence dashboard, 90 days | *Can you scope a data product from an open brief?* | Predictive modelling (this is a snapshot, not a forecast) |
+| One macro series, one market index | *Can you make defensible decisions under ambiguity?* | Intraday tick data (out of scope for a 90-day view) |
+| RAG signal with defined threshold | *Can you build something a non-technical user can act on?* | Macquarie-specific risk calibration (a conversation, not an assumption) |
+| Document AI usage and data quality | *Will you partner with the business, or just deliver code?* | Cross-asset coverage (one macro + one index is enough to demonstrate the pattern) |
 
-**Column 3 — What I deliberately did NOT try to answer:**
-- Predictive modelling (this is a snapshot, not a forecast)
-- Intraday tick data (out of scope for a 90-day view)
-- Macquarie-specific risk calibration (that's a conversation, not an assumption)
-- Cross-asset coverage (S&P 500 + VIX is enough to demonstrate the pattern)
+**Section 2 — Why these sources (FRED VIX + Yahoo S&P 500):**
 
-**What I say (≈2 minutes):**
+- **Lower API friction for a 5-day build** — FRED's API and the `yfinance` library are mature and well-documented; ASX historical data via RBA is also free but the API surface needs more plumbing
+- **Earlier daily publication** — US market data publishes mid-evening AEST, so I had a fresh data point every working day during development. ASX data would have been a day behind for half the build
+- **Universal recognition** — S&P 500 and VIX don't need explaining in a 20-minute presentation; ASX 200 + RBA cash rate would need more context-setting
+- **Architecture is source-agnostic** — adding ASX is implementing the existing base ingestion contract, not a redesign. **In a production deployment for an Australian bank, ASX would be added on day one.**
 
-> "The brief is a single page, and it's deliberately open-ended. My first decision wasn't about technology — it was about scope. The middle column captures the four questions I think the brief is really asking. The third column is, I think, the more important one. It lists the things I deliberately did not try to answer alone. Each of those is a conversation I'd want to have with you — your data product owner, your risk function, your business stakeholders. **Boundary-setting is a partnership skill, and I want to show you mine.** I'd rather come into a real engagement and ask the right questions than make assumptions and discover later they were wrong."
+**Section 3 — What the architecture is designed to support (post-trade business decisions):**
+
+- **Performance benchmarking** — was a quiet trading month genuinely quiet, or did the whole market move?
+- **Risk position sizing** — calibrated to volatility regime, not just static limits
+- **Post-trade analysis** — was a slow fill caused by market conditions or by operational lag?
+- **Pre-emptive operational signalling** — volatility regimes correlate with settlement risk, liquidity stress, counterparty stress
+
+**Below all three sections:** *"This is a v1 prototype. The point isn't the dashboard itself — it's that the architecture supports these four classes of business decision, and is built to be extended."*
+
+**What I say (≈2.5 minutes):**
+
+> "The brief is open-ended, so my first job was to set scope. The top section captures what the brief asks, how I interpreted it, and just as importantly — what I deliberately did NOT try to answer. **Boundary-setting is a partnership skill, and that's what I want to demonstrate.**
+>
+> The middle section explains why FRED and Yahoo, not RBA and ASX. **Practical reasons** — lower friction for a 5-day build, earlier daily data, universal recognition. **And one principled reason** — the architecture is source-agnostic, so adding ASX in production is a day's work, not a redesign. I want to be honest that in a real Macquarie deployment, ASX would be added on day one.
+>
+> The bottom section is the *why* of the whole architecture. The dashboard is a prototype; the architecture is built to support four classes of post-trade decisions — performance benchmarking, risk sizing, post-trade analysis, and operational signalling. **That's where this work earns its place in the business.** The dashboard is the demonstration; the architecture is the platform."
 
 ---
 
 ## Slide 3 — Pipeline walkthrough
 
-**Visual:** A medallion architecture diagram (left to right):
+**Visual:** Medallion architecture diagram (left to right):
 ```
    FRED API ────┐
                 ├─► RAW (bronze) ──► ALIGNED ──► CURATED (silver) ──► SERVING (gold) ──► DASHBOARD
@@ -71,7 +81,7 @@
                                           └──► QUARANTINE LOG (audit trail)
 ```
 
-Underneath the diagram, four columns labelled by layer, each one sentence:
+Underneath the diagram, the layer table:
 
 | Layer | What happens | Failure handling |
 |---|---|---|
@@ -80,17 +90,29 @@ Underneath the diagram, four columns labelled by layer, each one sentence:
 | **Curated (silver)** | DQ pass-fail split into curated table + quarantine log | Failures preserved with a typed reason code |
 | **Serving (gold)** | Metric computation + RAG classification | NaN values rendered as gaps in the dashboard, never zeroed |
 
-**Below the table:** *"Two sources (macro: FRED VIX, market index: Yahoo Finance S&P 500), four layers, full audit trail. The architecture is documented in six ADRs in the repo."*
+**Why this stack (callout below the table):**
+
+| Component | Choice | Why v1 | Production swap-in |
+|---|---|---|---|
+| Language | Python | Mature data ecosystem; easy team onboarding | Same |
+| Storage | Parquet + DuckDB | Zero infrastructure; analytical SQL out of the box | Iceberg / Delta on object storage |
+| Dashboard | Streamlit | Fastest path from Python to deployed UI | Tableau / Power BI / custom React |
+| Orchestration | GitHub Actions | Free CI; runs the daily pipeline on cron | Airflow / Dagster |
+| Quality | In-code DQ heuristics | Tight integration with pipeline | Great Expectations / Soda |
+
+**Below the stack table:** *"None of these is the production answer. All of them are the right v1 answer. **The architecture is layered so each component is independently replaceable** — the data contracts between layers don't change when the technology underneath does."*
 
 **What I say (≈3 minutes):**
 
-> "Here is the pipeline at a glance. Two sources on the left — VIX from FRED, which is the macro indicator, and S&P 500 from Yahoo Finance, which is the market index. Per the brief, one macro and one market series. They flow through four layers — raw, aligned, curated, and serving — before reaching the dashboard.
+> "Here is the pipeline at a glance. Two sources on the left — VIX from FRED for the macro indicator, S&P 500 from Yahoo Finance for the market index. They flow through four layers — raw, aligned, curated, and serving — before reaching the dashboard.
 >
-> The two things worth pausing on are error handling and handoff.
+> The two things worth pausing on are error handling and the stack choice.
 >
-> **Error handling.** Every layer has an explicit failure mode. When a source is missing — like Good Friday, when FRED publishes a placeholder and Yahoo doesn't open at all — the system doesn't crash and it doesn't silently drop the day. It quarantines the date with a typed reason code and continues. The dashboard shows you exactly which days were quarantined and why. **The system fails loudly, not quietly.**
+> **Error handling.** Every layer has an explicit failure mode. When a source is missing — Good Friday, for example, when FRED publishes a placeholder and Yahoo doesn't open — the system doesn't crash and it doesn't silently drop the day. It quarantines the date with a typed reason code and continues. The dashboard shows you exactly which days were quarantined and why. **The system fails loudly, not quietly.**
 >
-> **Handoff.** Every layer is independently testable. There are 115 unit tests across the codebase with 98% coverage. The architectural decisions are documented in six ADRs in the repository — what we chose, what we rejected, and why. A junior engineer joining the team can read the ADRs and understand the design without needing me in the room. That's what good handoff looks like."
+> **Stack choice.** Python, DuckDB, Streamlit, GitHub Actions. The bottom table is the most important thing on this slide. **None of these is the production answer.** All of them are the right *prototype* answer — they're zero-infrastructure, they run locally, they're well-documented. The architecture is layered so when this moves to production, each component is replaceable. Streamlit becomes a managed BI tool. DuckDB becomes Snowflake or BigQuery. GitHub Actions becomes Airflow or Dagster. **The data contracts between layers don't change.** That's the architectural discipline that lets a v1 prototype mature into a production platform without a rewrite.
+>
+> Six ADRs in the repository document every one of these decisions — what we chose, what we rejected, and why. A junior engineer joining the team can read the ADRs and understand the design without needing me in the room."
 
 ---
 
@@ -163,7 +185,7 @@ Underneath the diagram, four columns labelled by layer, each one sentence:
 
 ## Slide 7 — Team and standards
 
-**Visual:** Two side-by-side columns. Left: *Standards I'd put in place*. Right: *How I'd hand this off to a junior engineer*.
+**Visual:** Two side-by-side columns. Left: *Standards I'd put in place*. Right: *How I'd mentor — principles, not playbook*. Footer band below both columns.
 
 **Left — Standards I'd put in place:**
 - **Architecture Decision Records (ADRs)** for every significant choice. Status, context, decision, consequences. Reviewable as a PR.
@@ -172,24 +194,27 @@ Underneath the diagram, four columns labelled by layer, each one sentence:
 - **Test coverage threshold** — 90% minimum in CI; no merging below. This build sits at 98%.
 - **Data quality contract** — no silent drops. Every excluded record has a reason code and lives in the audit log.
 
-**Right — How I'd hand this off:**
-- Day 1: walk the new engineer through the medallion architecture and the ADRs. ~1 hour.
-- Day 2-3: pair on the first new ADR they write. They lead; I review.
-- Week 1: they pick up one ticket against this codebase. PR template requires a test, a passing build, and an ADR if architecture changes.
-- Week 2+: they own a layer (typically ingestion first — clear contract, low risk). I review PRs, no longer pair.
-- Always: the AGENT_LOG pattern extends to their AI use. If they override Claude, they log the override.
+**Right — How I'd mentor — principles, not playbook:**
 
-**Across the bottom, in a footer band:** *"The artefacts on the left are how I'd coach a team of analysts to present a story — the dashboard, the ADRs, and the AGENT_LOG are not just engineering documents, they are the format I'd teach the team to write in."*
+> *"I don't bring a fixed plan because the plan depends on the engineer. What I bring are principles that apply regardless of seniority."*
+
+- **Decisions made visible by default.** New engineers learn what good engineering thinking looks like by reading the ADRs and the AGENT_LOG *before* being asked to write their own. This codebase is the onboarding material — six ADRs, sixteen log entries, a metric contract, an architecture diagram. **Two days of reading, demo back to me on day three.**
+- **Pair before solo.** Whatever the first artefact is — reading a layer, writing a test, writing their first ADR — we do it together first. Velocity calibrates to ability; the goal is right thinking, not fast output.
+- **Teach via the artefacts.** ADRs, PR reviews, and AGENT_LOG entries are the teaching surface. Engineering judgement is captured in writing, not just in code. A junior engineer who can write a good ADR can communicate to a stakeholder.
+- **Standards modelled, not enforced.** The test coverage threshold, the no-silent-drops policy, the AI override pattern — these are how I work, not just what I demand. **The most consistent way to set a standard is to live it.**
+- **The team scales by mentoring multiplying.** A senior engineer reading this codebase can be mentoring the next hire within a month. A junior takes longer, but the same principles apply. **The goal isn't an engineer who follows the standards — it's an engineer who teaches the next person.**
+
+**Footer band (across both columns):** *"The artefacts on the left aren't just engineering documents — they are the format I'd teach a team of analysts to present in. An ADR teaches structured decision communication: context, decision, consequences. If your analysts can write in that pattern, they can present findings to business without getting questioned in the moment."*
 
 **What I say (≈3 minutes):**
 
 > "This is the slide I'd want you to remember. The role is 'Engineering Lead,' and leading is not the same as building. Building is what we just walked through. Leading is what I'm describing now.
 >
-> On the left are the standards I'd set up. Every architectural decision is captured in an ADR — short, reviewable, version-controlled. Every metric is defined in a contract before code is written. Every AI override is recorded in the AGENT_LOG. The pattern is consistent across humans and AI — both produce work that gets reviewed, both get a clean record of decisions made.
+> On the left are the standards I'd set up — ADRs for decisions, a metric contract before code, the AGENT_LOG for AI overrides, a coverage threshold in CI, and a data quality contract that prohibits silent drops. Five concrete artefacts. Each one is reviewable as a PR. Each one teaches what good looks like by being read, not just written.
 >
-> On the right is how I'd actually hand this off. Not 'here's the codebase, good luck.' Day 1 is a walkthrough. Days 2 and 3 we pair. Week 1 they take their first ticket with a PR template that requires a test, a passing build, and an ADR if the design changes. By week 2 they own a layer.
+> On the right is how I'd actually mentor. **I don't bring a fixed plan because the right plan depends on the engineer.** A senior joiner moves fast; a junior needs more pairing. What I bring are *principles* that apply regardless of seniority. Decisions are made visible by default — new joiners read the ADRs before writing their own. We pair before they go solo. We teach through the artefacts, not through lectures. And critically — **standards are modelled, not enforced.** The most consistent way to set a standard is to live it. If I'm cutting corners on tests, the team will too. If my ADRs are sloppy, theirs will be.
 >
-> And — this matters for a non-technical team — the same artefacts are how I'd coach an analyst team to *present* information. **An ADR is not just an engineering document; it's a template for how to communicate a decision to a stakeholder.** Context, decision, consequences. If your analysts can write that pattern, they can present findings to business in a way that doesn't get questioned in the moment. That's what I'd teach."
+> The footer at the bottom is the line I want to land. **These artefacts aren't just for engineers.** An ADR is a template for structured decision communication — context, decision, consequences. If your analysts can write in that pattern, they can present findings to business without being questioned in the moment. That's how engineering rigour translates into business credibility."
 
 ---
 
@@ -201,8 +226,9 @@ Underneath the diagram, four columns labelled by layer, each one sentence:
 - **Lakehouse migration** — Iceberg or Delta on S3 / Azure Data Lake; move beyond Parquet-in-repo
 - **Orchestration** — Airflow or Dagster in place of GitHub Actions
 - **Data quality framework** — Great Expectations or Soda for declarative DQ
-- **Lookback buffer for moving averages** — fetch 110 days, display 90 days, eliminate the start-of-window NaN
+- **Lookback buffer for moving averages** — fetch 110 days, display 90, eliminate the start-of-window NaN
 - **Percentile-based RAG thresholds** — replace fixed 20/30 with regime-aware bands
+- **ASX 200 + RBA series ingestion** — Australian-market-first version
 
 **Right — Business conversations:**
 - *What does this dashboard need to do that it currently doesn't?* — talk to the actual end-users
@@ -215,7 +241,7 @@ Underneath the diagram, four columns labelled by layer, each one sentence:
 
 **What I say (≈2 minutes):**
 
-> "If I were continuing past the case study, the work splits in two. The left column is the engineering migration — lakehouse, orchestrator, proper DQ tooling. These are well-understood patterns and the ADRs in the repo describe them.
+> "If I were continuing past the case study, the work splits in two. The left column is the engineering migration — lakehouse, orchestrator, proper DQ tooling, and an ASX-first ingestion path. These are well-understood patterns and the ADRs in the repo describe them.
 >
 > The right column is what I want you to notice. **A production dashboard isn't a technical artefact, it's a decision-support tool.** It only delivers value when the people using it are clear on what action it triggers. That clarity comes from conversations with stakeholders, not from code.
 >
@@ -277,9 +303,9 @@ Not part of the deck. Personal notes for Dipanjan.
 
 - 20-minute target.
 - Slides 3 (Pipeline walkthrough) and 7 (Team and standards) are the two anchor slides — give them ~3 minutes each.
-- Slides 5 (Dashboard demo) and 9 (Partnership) are also major — ~2.5-3 minutes each.
+- Slides 2 (Framing) and 5 (Dashboard demo) are also major — ~2.5-3 minutes each.
 - Other slides are ~2 minutes each.
-- Closing leaves ~5 minutes for Q&A on a clean run.
+- Closing leaves ~3 minutes for Q&A on a clean run.
 
 ## Voice
 
@@ -289,22 +315,31 @@ Not part of the deck. Personal notes for Dipanjan.
 - Don't say *"AI"* without qualifying it once. Say *"Claude"* the first time, *"the AI assistant"* thereafter.
 - The narration above is for tone — paraphrase in your own voice on the day. Don't read it.
 
-## What the panel is listening for (per business-focused panel)
+## What the panel is listening for (business-focused panel)
 
-- **Can this person work with us, not just for us?** → Slides 4, 8, 9
-- **Will they bring engineering rigour without making us feel the engineering is in charge?** → Slides 7, 8, 9
-- **Have they done the work, or are they bluffing?** → Slide 3 (pipeline detail) + Slide 6 (AI honesty) + the repo
+- **Can this person work with us, not just for us?** → Slides 2, 4, 8, 9
+- **Will they bring engineering rigour without making us feel the engineering is in charge?** → Slides 3, 7, 8, 9
+- **Have they done the work, or are they bluffing?** → Slide 3 (pipeline detail + stack) + Slide 6 (AI honesty) + the repo
 - **Are they a leader or an individual contributor?** → Tone throughout, especially Slide 7 and Slide 9
 
 ## Trapdoors to avoid
 
 - **Don't go deep on technical architecture unless asked.** The repo is the evidence; the deck is the pitch.
-- **Don't apologise for v1 limitations** (NaN gaps, fixed thresholds, etc) — frame them as deliberate v1 boundaries with a clear v2 path.
+- **Don't apologise for v1 limitations** (NaN gaps, fixed thresholds, US-market choice) — frame them as deliberate v1 boundaries with a clear v2 path.
 - **Don't praise AI unprompted.** If asked, be specific and honest. If not asked, don't bring it up beyond Slide 6.
 - **Don't volunteer the CI failure.** It's a documented deferred issue. If asked specifically, be honest: *"the CI test job has one failing dependency I haven't prioritised because it doesn't block local development. Five-minute fix I deferred to focus on the deliverable."*
 - **Don't demo `make run` from a terminal.** The dashboard is the demo; the repo is the evidence. Terminal during a non-technical panel demo is the wrong centre of gravity.
 
 ## Likely questions, and short crisp answers
+
+**Q: Why FRED and Yahoo instead of RBA and ASX?**
+A: Three reasons. Lower API friction for a 5-day build. Earlier daily publication so I had fresh data every working day. Universal recognition — no need to explain VIX in a 20-minute session. **In a Macquarie production deployment, ASX would be the priority — the architecture is source-agnostic, so adding it is implementing the existing base contract.**
+
+**Q: Why this stack — Python, DuckDB, Streamlit?**
+A: Right v1 answer, not the production answer. Zero infrastructure, runs locally, well-documented. Each component is independently replaceable in production: Streamlit → Tableau or Power BI; DuckDB → Snowflake or BigQuery; GitHub Actions → Airflow or Dagster. **The data contracts between layers don't change when the technology underneath does.**
+
+**Q: What business decisions does this architecture support?**
+A: Four. Performance benchmarking (was a quiet month genuinely quiet, or did the market move?). Risk position sizing calibrated to regime. Post-trade analysis (slow fill from market or operational lag?). Pre-emptive operational signalling (volatility regimes correlate with settlement risk).
 
 **Q: Why did you commit data to the repo?**
 A: So a reviewer can experience the dashboard without running the pipeline. The committed silver and gold layers represent the demo state. The raw bronze layer is regeneratable. ADR-0001 documents the trade-off.
@@ -315,17 +350,17 @@ A: Inner-join silently loses data. We saw it live on May 22 — Yahoo had a clos
 **Q: Why two SMAs, not one?**
 A: Different timescales tell different stories. Fast (10-day) catches regime changes early; slow (20-day) shows underlying trend. When they cross, momentum has shifted — a story a non-technical user can read off the chart.
 
+**Q: How would you mentor a junior engineer joining your team?**
+A: I don't bring a fixed plan because it depends on the engineer. What I bring are principles. Decisions are made visible — they read the ADRs and AGENT_LOG before writing their own. We pair before they go solo. We teach through the artefacts, not lectures. And critically, **standards are modelled, not enforced.** If my tests are sloppy, theirs will be too.
+
 **Q: How would you scale this?**
-A: The pure functions (alignment, DQ, metrics) are scale-agnostic — they'd migrate to a lakehouse without code change. Orchestration would shift from GitHub Actions to Airflow or Dagster. Tests extend, not rewrite.
+A: The pure functions (alignment, DQ, metrics) are scale-agnostic — they'd migrate to a lakehouse without code change. Orchestration shifts from GitHub Actions to Airflow or Dagster. Tests extend, not rewrite.
 
 **Q: How did AI help and hurt?**
 A: It accelerated the boilerplate (test scaffolding, ADR templates, dashboard rendering). It hurt in two specific places documented in the AGENT_LOG. Net positive — but only because supervision was active.
 
 **Q: What would you change about your approach?**
 A: Three things. I would have started the slide deck on day one rather than waiting until the build was done. I would have set up CI properly before iterating, not as polish. And I would have committed the data to the repo earlier, so the reviewer experience was always one click.
-
-**Q: What if the panel cares more about the technical detail than I think?**
-A: ADR-0006 (alignment), ADR-0003 (RAG threshold rationale), and the architecture diagram in `docs/architecture-current-state.mmd` are the three places to point them at. The AGENT_LOG entry on the all-NaN-Close design decision is a good demonstration of design judgment.
 
 ---
 
@@ -335,3 +370,4 @@ A: ADR-0006 (alignment), ADR-0003 (RAG threshold rationale), and the architectur
 |---|---|---|---|
 | 1.0 | 2026-05-24 | Dipanjan Mukherjee | Initial business-first deck structure |
 | 2.0 | 2026-05-25 | Dipanjan Mukherjee | Restructured against case study brief: added Pipeline walkthrough (Slide 3), added Team and standards (Slide 7), renamed sections to match brief language exactly |
+| 2.1 | 2026-05-25 | Dipanjan Mukherjee | Added source rationale + business decisions to Slide 2 (Framing); added "Why this stack" to Slide 3 (Pipeline walkthrough); restructured Slide 7 mentoring content from rigid week-by-week plan to principles-and-strategy that scales by engineer |
